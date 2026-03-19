@@ -1,0 +1,369 @@
+import React, { useState, useEffect } from 'react';
+import { MapPin, Star, CheckCircle, ChevronLeft, Plus, X, MessageCircle, Save, Trash2, Edit2, ExternalLink, MoreVertical, Calendar, Check } from 'lucide-react';
+
+const App = () => {
+  // --- 1. 核心資料庫 (可初始化的範例數據) ---
+  const [restaurants, setRestaurants] = useState([
+    {
+      id: 1,
+      name: '隱家拉麵',
+      checked: true,
+      rating: 5,
+      tags: ['濃郁系', '排隊名店', '赤峰街'],
+      category: '拉麵',
+      area: '中山區',
+      mapsUrl: 'https://www.google.com/maps/search/%E9%9A%B1%E5%AE%B6%E6%8B%89%E9%BA%B5',
+      history: [
+        { id: 101, date: '2023-11-15', note: '這次點了豪華版拉麵，叉燒厚實，湯頭偏鹹但很道地。' },
+        { id: 102, date: '2024-02-10', note: '假日排隊約 40 分鐘，店員服務態度很好。' }
+      ]
+    },
+    {
+      id: 2,
+      name: '隨意鳥地方',
+      checked: false,
+      rating: 4,
+      tags: ['景觀餐廳', '約會'],
+      category: '義大利麵',
+      area: '信義區',
+      mapsUrl: 'https://www.google.com/maps/search/%E9%9A%A8%E6%84%8F%E9%B3%A5%E5%9C%B0%E6%96%B9',
+      history: []
+    }
+  ]);
+
+  // --- 2. UI 狀態管理 ---
+  const [view, setView] = useState('list');
+  const [selectedId, setSelectedId] = useState(null);
+  const [filterCategory, setFilterCategory] = useState('全部');
+  const [filterArea, setFilterArea] = useState('全部');
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // --- 3. 表單與動態分類狀態 ---
+  const [form, setForm] = useState({
+    name: '',
+    area: '',
+    category: '', 
+    tags: [],
+    mapsUrl: '',
+    rating: 0,
+    history: []
+  });
+  
+  const [categories, setCategories] = useState(['小吃', '義大利麵', '拉麵', '日式', '美式', '咖啡廳', '火鍋']);
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategoryInput, setNewCategoryInput] = useState('');
+  const [tempTag, setTempTag] = useState('');
+  const [tempHistory, setTempHistory] = useState({ date: new Date().toISOString().split('T')[0], note: '' });
+  const [showMenuId, setShowMenuId] = useState(null);
+
+  // --- 4. 輔助函數與邏輯 ---
+  const commonAreas = ['中山區', '信義區', '大安區', '松山區', '內湖區', '萬華區', '中正區', '士林區', '北投區', '板橋區'];
+  const areas = ['全部', ...new Set(restaurants.map(r => r.area))].filter(Boolean);
+  const selectedRest = restaurants.find(r => r.id === selectedId);
+
+  // 必填項檢查：名稱、地區、分類、地圖連結
+  const isFormValid = 
+    form.name.trim() !== '' && 
+    form.category !== '' && 
+    form.area.trim() !== '' && 
+    form.mapsUrl.trim() !== '';
+
+  // 自動偵測地區功能 (依據餐廳名稱關鍵字)
+  useEffect(() => {
+    if (view === 'add' || view === 'edit') {
+      const name = form.name;
+      const detectedArea = commonAreas.find(a => name.includes(a.replace('區', '')) || name.includes(a));
+      if (detectedArea && !form.area) {
+        setForm(prev => ({ ...prev, area: detectedArea }));
+      }
+    }
+  }, [form.name, view]);
+
+  const filteredList = restaurants.filter(item => {
+    const matchCategory = filterCategory === '全部' || item.category === filterCategory;
+    const matchArea = filterArea === '全部' || item.area === filterArea;
+    const matchSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchCategory && matchArea && matchSearch;
+  });
+
+  const toggleCheck = (e, id) => {
+    e.stopPropagation();
+    setRestaurants(prev => prev.map(r => r.id === id ? { ...r, checked: !r.checked } : r));
+  };
+
+  const handleSave = () => {
+    if (!isFormValid) return;
+    if (view === 'add') {
+      const newEntry = { ...form, id: Date.now(), checked: form.rating > 0 };
+      setRestaurants([newEntry, ...restaurants]);
+    } else {
+      setRestaurants(restaurants.map(r => r.id === selectedId ? { ...r, ...form } : r));
+    }
+    resetForm();
+    setView('list');
+  };
+
+  const resetForm = () => {
+    setForm({ name: '', area: '', category: '', tags: [], mapsUrl: '', rating: 0, history: [] });
+    setTempTag('');
+    setTempHistory({ date: new Date().toISOString().split('T')[0], note: '' });
+    setIsAddingCategory(false);
+  };
+
+  const deleteRestaurant = (id) => {
+    setRestaurants(restaurants.filter(r => r.id !== id));
+    setShowMenuId(null);
+    if (view === 'detail') setView('list');
+  };
+
+  const addHistoryItem = () => {
+    if (!tempHistory.note.trim()) return;
+    const newItem = { ...tempHistory, id: Date.now() };
+    setForm({ ...form, history: [newItem, ...form.history] });
+    setTempHistory({ date: new Date().toISOString().split('T')[0], note: '' });
+  };
+
+  const removeHistoryItem = (hid) => {
+    setForm({ ...form, history: form.history.filter(h => h.id !== hid) });
+  };
+
+  const addNewCategory = () => {
+    const trimmed = newCategoryInput.trim();
+    if (trimmed && !categories.includes(trimmed)) {
+      setCategories([...categories, trimmed]);
+      setForm({ ...form, category: trimmed });
+      setNewCategoryInput('');
+      setIsAddingCategory(false);
+    }
+  };
+
+  // --- 5. UI 渲染渲染 ---
+
+  // 列表頁面
+  const ListView = () => (
+    <div className="max-w-md mx-auto bg-[#FDFBF7] min-h-screen pb-24">
+      <header className="bg-white p-6 shadow-sm sticky top-0 z-10 border-b border-gray-100">
+        <h1 className="text-2xl font-black text-gray-800 mb-4">🍴 Sarah 的美食本本</h1>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className="w-full bg-gray-50 border border-gray-200 text-gray-700 text-xs font-bold p-2.5 rounded-xl appearance-none outline-none">
+              <option value="全部">所有分類</option>
+              {categories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select value={filterArea} onChange={(e) => setFilterArea(e.target.value)} className="w-full bg-gray-50 border border-gray-200 text-gray-700 text-xs font-bold p-2.5 rounded-xl appearance-none outline-none">
+              {areas.map(a => <option key={a} value={a}>{a === '全部' ? '所有地區' : a}</option>)}
+            </select>
+          </div>
+          <input type="text" placeholder="搜尋餐廳名稱..." className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-purple-300 text-sm" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+        </div>
+      </header>
+
+      <div className="p-4 space-y-4">
+        {filteredList.map(rest => (
+          <div key={rest.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden relative" onClick={() => { setSelectedId(rest.id); setView('detail'); }}>
+            <div className="p-4">
+              <div className="flex justify-between items-start mb-2">
+                <div className="flex items-start gap-3 flex-1">
+                  <button onClick={(e) => toggleCheck(e, rest.id)} className="mt-1">
+                    <CheckCircle className={`w-7 h-7 ${rest.checked ? 'text-green-500 fill-green-50' : 'text-gray-200'}`} />
+                  </button>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-bold text-gray-800">{rest.name}</h3>
+                      <a href={rest.mapsUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-blue-500 p-1"><ExternalLink size={14} /></a>
+                    </div>
+                    <div className="flex gap-0.5 mt-1">
+                      {[1,2,3,4,5].map(s => <Star key={s} size={12} className={`${s <= rest.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-100'}`} />)}
+                    </div>
+                  </div>
+                </div>
+                <button onClick={(e) => { e.stopPropagation(); setShowMenuId(showMenuId === rest.id ? null : rest.id); }} className="p-1 text-gray-400"><MoreVertical size={18} /></button>
+                {showMenuId === rest.id && (
+                  <div className="absolute right-4 top-12 w-24 bg-white shadow-xl border rounded-lg py-1 z-20">
+                    <button onClick={(e) => { e.stopPropagation(); deleteRestaurant(rest.id); }} className="w-full px-3 py-2 text-left text-xs text-red-500 flex items-center gap-2"><Trash2 size={12}/> 刪除</button>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                <span className="bg-purple-50 text-purple-600 px-2 py-0.5 rounded text-[10px] font-black">{rest.category}</span>
+                {rest.tags.map((tag, idx) => <span key={idx} className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-[10px]">#{tag}</span>)}
+              </div>
+              <div className="mt-3 flex items-center gap-4 text-[10px] text-gray-400">
+                <div className="flex items-center gap-1"><MapPin size={10} /> {rest.area}</div>
+                {rest.history.length > 0 && <div className="flex items-center gap-1"><MessageCircle size={10} /> {rest.history.length} 則紀錄</div>}
+              </div>
+            </div>
+          </div>
+        ))}
+        {filteredList.length === 0 && (
+          <div className="text-center py-20 text-gray-400 text-sm">找不到符合的餐廳唷 🍜</div>
+        )}
+      </div>
+      <button onClick={() => { resetForm(); setView('add'); }} className="fixed bottom-8 right-8 bg-purple-600 text-white p-4 rounded-full shadow-2xl z-30 active:scale-90 transition-transform"><Plus size={28} /></button>
+    </div>
+  );
+
+  // 新增/編輯表單頁面
+  const FormView = ({ title }) => (
+    <div className="max-w-md mx-auto bg-white min-h-screen pb-10">
+      <nav className="p-4 flex items-center justify-between border-b sticky top-0 z-20 bg-white">
+        {/* 邏輯修正：新增模式下一律回列表首頁 */}
+        <button onClick={() => setView(view === 'add' ? 'list' : 'detail')} className="p-2 text-purple-600"><ChevronLeft size={24} /></button>
+        <h2 className="text-lg font-bold text-gray-700">{title}</h2>
+        <div className="w-10"></div>
+      </nav>
+      <div className="p-8 space-y-6">
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-bold text-gray-500 mb-1 block">餐廳名稱 <span className="text-red-500">*</span></label>
+            <input type="text" className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 focus:ring-purple-100" value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} placeholder="例如：隱家拉麵 中山店" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-bold text-gray-500 mb-1 block">地區 <span className="text-red-500">*</span></label>
+              <input type="text" className="w-full p-4 bg-gray-50 rounded-2xl outline-none text-sm focus:ring-2 focus:ring-purple-100" value={form.area} onChange={(e) => setForm({...form, area: e.target.value})} placeholder="例如：中山區" />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-gray-500 mb-1 block">分類 <span className="text-red-500">*</span></label>
+              <div className="flex gap-2">
+                <select className="flex-1 p-4 bg-gray-50 rounded-2xl outline-none text-sm focus:ring-2 focus:ring-purple-100" value={form.category} onChange={(e) => setForm({...form, category: e.target.value})}>
+                  <option value="" disabled>請選擇</option>
+                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <button 
+                  type="button"
+                  onClick={() => setIsAddingCategory(!isAddingCategory)}
+                  className={`px-4 rounded-2xl border transition-colors ${isAddingCategory ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-purple-600 border-purple-200'}`}
+                >
+                  <Plus size={20} />
+                </button>
+              </div>
+              {isAddingCategory && (
+                <div className="mt-2 flex gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <input 
+                    type="text" 
+                    autoFocus
+                    className="flex-1 p-3 bg-purple-50 rounded-xl outline-none text-sm border border-purple-100" 
+                    placeholder="新分類名稱..." 
+                    value={newCategoryInput}
+                    onChange={(e) => setNewCategoryInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && addNewCategory()}
+                  />
+                  <button onClick={addNewCategory} className="bg-purple-600 text-white p-3 rounded-xl active:scale-95"><Check size={18} /></button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-gray-500 mb-1 block">Google Maps 網址 <span className="text-red-500">*</span></label>
+            <input type="url" className="w-full p-4 bg-gray-50 rounded-2xl outline-none text-xs focus:ring-2 focus:ring-purple-100" value={form.mapsUrl} onChange={(e) => setForm({...form, mapsUrl: e.target.value})} placeholder="請貼上完整的地圖連結..." />
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-gray-500 mb-1 block">評分 (選填)</label>
+            <div className="flex gap-2">
+              {[1,2,3,4,5].map(s => <Star key={s} size={32} onClick={() => setForm({...form, rating: s})} className={`cursor-pointer transition-all ${s <= form.rating ? 'text-yellow-400 fill-yellow-400 scale-110' : 'text-gray-200 hover:text-yellow-200'}`} />)}
+            </div>
+          </div>
+
+          <div className="pt-4 border-t">
+            <label className="text-xs font-bold text-gray-800 mb-3 block flex items-center gap-2"><MessageCircle size={14}/> 用餐紀錄 / 評論 (選填)</label>
+            <div className="bg-gray-50 p-4 rounded-2xl space-y-3 mb-4">
+               <input type="date" className="w-full p-2 text-xs bg-white rounded-lg border border-gray-100" value={tempHistory.date} onChange={(e) => setTempHistory({...tempHistory, date: e.target.value})} />
+               <textarea className="w-full p-3 text-sm bg-white rounded-lg border border-gray-100 outline-none focus:ring-2 focus:ring-purple-100" rows="2" placeholder="分享妳的心得或推薦菜色..." value={tempHistory.note} onChange={(e) => setTempHistory({...tempHistory, note: e.target.value})}></textarea>
+               <button onClick={addHistoryItem} className="w-full py-2 bg-purple-100 text-purple-600 rounded-xl text-xs font-bold hover:bg-purple-200 transition-colors">+ 新增評論</button>
+            </div>
+            <div className="space-y-2">
+              {form.history.map(h => (
+                <div key={h.id} className="flex justify-between items-start p-3 bg-white border border-gray-100 rounded-xl shadow-sm">
+                  <div className="flex-1 mr-2">
+                    <p className="text-[10px] text-gray-400 font-bold mb-1">{h.date}</p>
+                    <p className="text-xs text-gray-600 leading-relaxed">{h.note}</p>
+                  </div>
+                  <button onClick={() => removeHistoryItem(h.id)} className="text-gray-300 hover:text-red-400"><X size={14}/></button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-gray-500 mb-1 block">標籤 (選填)</label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {form.tags.map((t, i) => <span key={i} className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs flex items-center gap-1">#{t} <X size={10} className="cursor-pointer" onClick={() => setForm({...form, tags: form.tags.filter((_, idx) => idx !== i)})} /></span>)}
+            </div>
+            {form.tags.length < 5 && <input type="text" className="w-full p-4 bg-gray-50 rounded-2xl outline-none text-sm border-b-2 border-purple-200 focus:bg-purple-50 transition-colors" placeholder="輸入標籤後按 Enter..." value={tempTag} onChange={(e) => setTempTag(e.target.value)} onKeyDown={(e) => { if(e.key === 'Enter' && tempTag.trim()) { e.preventDefault(); if(!form.tags.includes(tempTag.trim())) { setForm({...form, tags: [...form.tags, tempTag.trim()]}); setTempTag(''); } } }} />}
+          </div>
+        </div>
+        
+        <div className="pt-4 sticky bottom-0 bg-white pb-4 border-t mt-4">
+          {!isFormValid && <p className="text-[10px] text-red-400 text-center mb-2 font-bold font-sans">⚠️ 請填寫所有必填欄位 (*) 才能儲存</p>}
+          <button 
+            onClick={handleSave} 
+            disabled={!isFormValid} 
+            className={`w-full py-4 rounded-2xl font-black shadow-xl flex items-center justify-center gap-2 transition-all ${isFormValid ? 'bg-purple-600 text-white active:scale-95' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+          >
+            <Save size={20} /> 儲存到本本
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // 餐廳詳情頁面
+  const DetailView = () => (
+    <div className="max-w-md mx-auto bg-[#FDFBF7] min-h-screen">
+      <nav className="p-4 flex items-center justify-between bg-white border-b sticky top-0 z-20">
+        <button onClick={() => setView('list')} className="p-2 text-purple-600"><ChevronLeft size={24} /></button>
+        <h2 className="text-lg font-bold text-gray-700">餐廳詳情</h2>
+        <button onClick={() => { setForm({...selectedRest}); setView('edit'); }} className="p-2 text-gray-400 hover:text-purple-600 transition-colors"><Edit2 size={20}/></button>
+      </nav>
+      <div className="p-6 space-y-6 pb-24">
+        <div className="bg-white p-8 rounded-[40px] shadow-sm border border-purple-50 text-center">
+          <div className="flex justify-center gap-1 mb-4">
+            {[1,2,3,4,5].map(s => <Star key={s} size={28} className={`${s <= selectedRest.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-100'}`} />)}
+          </div>
+          <h1 className="text-3xl font-black text-gray-800 mb-2">{selectedRest.name}</h1>
+          <p className="text-sm text-gray-400 mb-6 flex items-center justify-center gap-2"><MapPin size={14}/>{selectedRest.area} • {selectedRest.category}</p>
+          <div className="flex flex-wrap justify-center gap-2 mb-6">
+            {selectedRest.tags.map((t, i) => <span key={i} className="bg-purple-50 text-purple-600 px-3 py-1 rounded-full text-xs font-bold">#{t}</span>)}
+          </div>
+          <a href={selectedRest.mapsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 bg-gray-800 text-white px-8 py-3 rounded-full text-sm font-bold hover:bg-black transition-transform active:scale-95">在 Google Maps 開啟</a>
+        </div>
+
+        <div className="space-y-4">
+           <h3 className="text-lg font-black text-gray-800 flex items-center gap-2 px-2">
+             <Calendar size={20} className="text-purple-600"/> 用餐紀錄 ({selectedRest.history.length})
+           </h3>
+           {selectedRest.history.length > 0 ? (
+             selectedRest.history.map(h => (
+               <div key={h.id} className="bg-white p-6 rounded-[30px] shadow-sm border border-gray-50 animate-in fade-in duration-500">
+                 <div className="flex items-center gap-2 mb-3 text-purple-600 font-bold text-xs bg-purple-50 w-fit px-3 py-1 rounded-full">
+                   {h.date}
+                 </div>
+                 <p className="text-sm text-gray-600 leading-relaxed font-medium">
+                   {h.note}
+                 </p>
+               </div>
+             ))
+           ) : (
+             <div className="bg-gray-100 p-10 rounded-[30px] text-center border-2 border-dashed border-gray-200">
+                <p className="text-sm text-gray-400 font-bold">目前還沒有用餐評論唷！<br/>點擊右上角編輯來新增一則吧 ✨</p>
+             </div>
+           )}
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="font-sans antialiased text-gray-900 bg-[#FDFBF7]">
+      {view === 'list' && <ListView />}
+      {view === 'detail' && <DetailView />}
+      {(view === 'add' || view === 'edit') && <FormView title={view === 'add' ? '新增美食' : '編輯餐廳資訊'} />}
+    </div>
+  );
+};
+
+export default App;
